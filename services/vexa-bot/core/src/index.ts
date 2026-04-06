@@ -14,7 +14,9 @@ import { MeetingChatService, ChatTranscriptConfig } from "./services/chat";
 import { ScreenContentService, getVirtualCameraInitScript, getVideoBlockInitScript } from "./services/screen-content";
 import { ScreenShareService } from "./services/screen-share"; // kept for Teams; unused for Google Meet camera-feed approach
 import { createClient, RedisClientType } from 'redis';
-import { Page, Browser } from 'playwright-core';
+import { Page, Browser, BrowserContext } from 'playwright-core';
+import * as fs from 'fs';
+import * as path from 'path';
 // HTTP imports removed - using unified callback service instead
 
 // Module-level variables to store current configuration
@@ -1082,15 +1084,40 @@ export async function runBot(botConfig: BotConfig): Promise<void> {// Store botC
       args: getBrowserArgs(!!botConfig.voiceAgentEnabled),
     });
 
-    // Create a new page with permissions and viewport for non-Teams
-    const context = await browserInstance.newContext({
-      permissions: ["camera", "microphone"],
+    const baseContextOptions = {
+      permissions: ["camera", "microphone"] as const,
       userAgent: userAgent,
       viewport: {
         width: 1280,
         height: 720
       }
-    });
+    };
+
+    const defaultAuthPath = "/app/storage/auth.json";
+    const authStatePath = process.env.GOOGLE_MEET_AUTH_STATE_PATH
+      ? path.resolve(process.env.GOOGLE_MEET_AUTH_STATE_PATH)
+      : path.resolve(defaultAuthPath);
+
+    let context: BrowserContext;
+    if (botConfig.platform === "google_meet" && fs.existsSync(authStatePath)) {
+      try {
+        log(`Google Meet: loading Playwright storage state from ${authStatePath}`);
+        context = await browserInstance.newContext({
+          ...baseContextOptions,
+          storageState: authStatePath
+        });
+      } catch (e: any) {
+        log(
+          `Warning: Failed to load Google Meet auth state (${e?.message || e}). Falling back to guest (no storage state).`
+        );
+        context = await browserInstance.newContext(baseContextOptions);
+      }
+    } else {
+      if (botConfig.platform === "google_meet") {
+        log(`Google Meet: no auth state file at ${authStatePath} (using guest join)`);
+      }
+      context = await browserInstance.newContext(baseContextOptions);
+    }
 
     // Set voice agent flag before virtual camera script so it knows
     // whether to disable incoming video tracks (saves ~87% CPU per bot).
