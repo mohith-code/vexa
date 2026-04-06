@@ -162,10 +162,11 @@ COPY libs/shared-models/alembic/ /app/alembic/
 # Copy vexa-bot source
 COPY services/vexa-bot/core/ /app/vexa-bot/
 
-# Build the bot
+# Build the bot (needs devDependencies e.g. typescript for `tsc`; prune after compile)
 WORKDIR /app/vexa-bot
-RUN npm ci --omit=dev 2>/dev/null || npm install \
-    && npm run build
+RUN npm ci 2>/dev/null || npm install \
+    && npm run build \
+    && npm prune --omit=dev
 
 # Install additional browsers for Teams support
 RUN npx playwright install msedge --with-deps || true
