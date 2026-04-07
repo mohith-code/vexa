@@ -1085,7 +1085,8 @@ export async function runBot(botConfig: BotConfig): Promise<void> {// Store botC
     });
 
     const baseContextOptions = {
-      permissions: ["camera", "microphone"] as const,
+      // Must be a mutable string[] for Playwright's BrowserContextOptions (not `as const`).
+      permissions: ["camera", "microphone"],
       userAgent: userAgent,
       viewport: {
         width: 1280,
